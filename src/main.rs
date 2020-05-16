@@ -99,30 +99,19 @@ impl Game<'_> {
             let mut copy = self.current;
             let mut maxy = 0;
 
-            if left || right {
-                let mut correct = true;
-
-                for i in copy.iter_mut() {
-                    if ((i.0 < 1 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0) && left)
-                        || ((i.0 > GAME_WIDTH || self.field[i.0 + (i.1 + 1) * GAME_WIDTH + 1] != 0) && right) {
-                        correct = false;
-                        break;
-                    }
-
-                    if left { (*i).0 -= 1 } else { (*i).0 += 1 }
-                }
-
-                if !correct {
-                    copy = self.current;
-                }
-            }
-
             let mut something_underneath = false;
+            let mut correct = true;
 
-            // (4) Move tetromino down
             for i in copy.iter_mut() {
                 (*i).1 += 1;
                 if i.1 > maxy { maxy = i.1 }
+
+                if ((i.0 < 1 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0) && left)
+                    || ((i.0 > GAME_WIDTH || self.field[i.0 + (i.1 + 1) * GAME_WIDTH + 1] != 0) && right) {
+                    correct = false;
+                }
+
+                if left && correct { (*i).0 -= 1 } else if right && correct { (*i).0 += 1 }
 
                 if self.field[i.0 + (i.1 + 1) * GAME_WIDTH] != 0 {
                     something_underneath = true;
