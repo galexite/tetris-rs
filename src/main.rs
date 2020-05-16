@@ -97,34 +97,38 @@ impl Game<'_> {
         // Delay movement of tetrominos
         if self.time > delay {
             let mut copy = self.current;
-            let mut maxy = 0;
-
-            let mut something_underneath = false;
             let mut correct = true;
+            let mut swap = false;
 
             for i in copy.iter_mut() {
-                (*i).1 += 1;
-                if i.1 > maxy { maxy = i.1 }
-
-                if ((i.0 < 1 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0) && left)
-                    || ((i.0 > GAME_WIDTH || self.field[i.0 + (i.1 + 1) * GAME_WIDTH + 1] != 0) && right) {
+                if (left && (i.0 <= 1 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0))
+                    || (right && (i.0 >= GAME_WIDTH || self.field[i.0 + (i.1 + 1) * GAME_WIDTH + 1] != 0)) {
                     correct = false;
+                    break;
                 }
 
-                if left && correct { (*i).0 -= 1 } else if right && correct { (*i).0 += 1 }
+                if left {
+                    (*i).0 -= 1;
+                }
 
-                if self.field[i.0 + (i.1 + 1) * GAME_WIDTH] != 0 {
-                    something_underneath = true;
+                if right {
+                    (*i).0 += 1;
                 }
             }
 
-            self.current = copy;
+            if correct {
+                self.current = copy;
+            }
 
-            // (5) If tetromino has hit bottom, or there is a non-empty block directly underneath
-            //     then copy current in to field, move next tetromino in to current,
-            //     generate a new tetromino for the next.
+            for i in self.current.iter_mut() {
+                (*i).1 += 1;
 
-            if something_underneath || maxy >= GAME_HEIGHT - 1 {
+                if i.1 >= GAME_HEIGHT - 1 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH] != 0 {
+                    swap = true;
+                }
+            }
+
+            if swap {
                 for point in self.current.iter() {
                     self.field[point.0 + point.1 * GAME_WIDTH] = self.current_color;
                 }
