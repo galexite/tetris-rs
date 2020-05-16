@@ -83,7 +83,7 @@ impl Game<'_> {
 
         let mut i = 0;
         for point in TETROMINOS[color].iter() {
-            tetromino[i] = (point % 2, point / 2);
+            tetromino[i] = (point / 2, point % 2);
             i += 1;
         }
 
@@ -126,7 +126,6 @@ impl Game<'_> {
 
                 if self.field[i.0 + (i.1 + 1) * GAME_WIDTH] != 0 {
                     something_underneath = true;
-                    break;
                 }
             }
 
