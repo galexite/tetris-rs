@@ -1,12 +1,11 @@
 extern crate rand;
-extern crate sfml;
+extern crate raylib;
 
-use rand::{Rng, thread_rng};
-
-use sfml::graphics::{Color, RectangleShape, RenderTarget, RenderWindow, Shape, Transformable};
-use sfml::window::{Event, Style, Key};
-use sfml::system::Clock;
 use rand::prelude::ThreadRng;
+use rand::{thread_rng, Rng};
+use raylib::color::Color;
+use raylib::prelude::*;
+use std::convert::TryInto;
 
 const TETROMINOS: [[usize; 4]; 7] = [
     [0, 2, 4, 6],
@@ -15,18 +14,18 @@ const TETROMINOS: [[usize; 4]; 7] = [
     [0, 1, 2, 3],
     [0, 2, 3, 5],
     [0, 2, 3, 4],
-    [1, 2, 3, 4]
+    [1, 2, 3, 4],
 ];
 
 const TETROMINO_COLORS: [Color; 8] = [
-    Color::TRANSPARENT,
-    Color::CYAN,
+    Color::BLANK,
+    Color::SKYBLUE,
     Color::BLUE,
-    Color::WHITE, // should actually be orange
+    Color::ORANGE,
     Color::YELLOW,
     Color::GREEN,
     Color::MAGENTA,
-    Color::RED
+    Color::RED,
 ];
 
 const GAME_WIDTH: usize = 10;
@@ -35,45 +34,39 @@ const GAME_HEIGHT: usize = 20;
 const GAME_SIZE: usize = GAME_WIDTH * (GAME_HEIGHT + 4);
 const GAME_UNPLAYABLE_SIZE: usize = GAME_WIDTH * 4;
 
-const GAME_DELAY: f32 = 0.5f32;
-const GAME_QUICK_DELAY: f32 = 0.2f32;
+const GAME_DELAY: f64 = 0.5f64;
+const GAME_QUICK_DELAY: f64 = 0.2f64;
 
-struct Game<'s> {
+const SQUARE_SIZE: i32 = 28;
+
+struct Game {
     field: [usize; GAME_SIZE],
     current: [(usize, usize); 4],
     current_color: usize,
     next: [(usize, usize); 4],
     next_color: usize,
-    time: f32,
-    square: RectangleShape<'s>,
-    window: RenderWindow,
-    rng: ThreadRng
+    time: f64,
+    rl: RaylibHandle,
+    thread: RaylibThread,
+    rng: ThreadRng,
 }
 
-impl Game<'_> {
+impl Game {
     fn new() -> Self {
-        let mut square = RectangleShape::new();
-        square.set_size((28f32, 28f32));
-
-
-        let mut window = RenderWindow::new((800, 600),
-                                           "Tetris",
-                                           Style::DEFAULT,
-                                           &Default::default());
-        window.set_vertical_sync_enabled(true);
+        let (rl, thread) = raylib::init().size(800, 600).title("tetris-rs").build();
 
         let rng = thread_rng();
 
         Game {
             field: [0; GAME_SIZE],
-            time: 0f32,
+            time: 0f64,
             current: [(0, 0); 4],
             current_color: 0,
             next: [(0, 0); 4],
             next_color: 0,
-            square,
-            window,
-            rng
+            rl,
+            thread,
+            rng,
         }
     }
 
@@ -90,7 +83,7 @@ impl Game<'_> {
         (tetromino, color)
     }
 
-    fn update(self: &mut Self, dt: f32, up: bool, down: bool, left: bool, right: bool) {
+    fn update(self: &mut Self, dt: f64, up: bool, down: bool, left: bool, right: bool) {
         // (1) Check if down, then accelerate delay
         let delay = if down { GAME_QUICK_DELAY } else { GAME_DELAY };
 
@@ -101,8 +94,11 @@ impl Game<'_> {
             let mut swap = false;
 
             for i in copy.iter_mut() {
-                if (left && (i.0 <= 1 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0))
-                    || (right && (i.0 >= GAME_WIDTH || self.field[i.0 + (i.1 + 1) * GAME_WIDTH + 1] != 0)) {
+                if (left && (i.0 <= 0 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0))
+                    || (right
+                        && (i.0 >= GAME_WIDTH || self.field[i.0 + (i.1 + 1) * GAME_WIDTH + 1] != 0))
+                {
+                    println!("can't go that way: l:{}, r:{}; i.0:{}, i.1:{}", left, right, i.0, i.1);
                     correct = false;
                     break;
                 }
@@ -142,35 +138,51 @@ impl Game<'_> {
             }
 
             // (6) Reset delay timer
-            self.time = 0f32;
+            self.time = 0f64;
         }
     }
 
     fn draw(self: &mut Self) {
+        let mut d = self.rl.begin_drawing(&self.thread);
+        d.clear_background(Color::BLACK);
+
         for i in GAME_UNPLAYABLE_SIZE..GAME_SIZE - GAME_UNPLAYABLE_SIZE {
             if self.field[i] == 0 {
                 continue;
             }
 
-            let x = i % GAME_WIDTH;
-            let y = i / GAME_WIDTH - 4;
+            let x: i32 = (i % GAME_WIDTH).try_into().unwrap();
+            let y: i32 = (i / GAME_WIDTH - 4).try_into().unwrap();
 
-            self.square.set_fill_color(TETROMINO_COLORS[self.field[i]]);
-            self.square.set_position((x as f32 * 30f32 + 60f32, y as f32 * 30f32 + 60f32));
-            self.window.draw(&self.square);
+            d.draw_rectangle(
+                x * 30 + 60,
+                y * 30 + 60,
+                SQUARE_SIZE,
+                SQUARE_SIZE,
+                TETROMINO_COLORS[self.field[i]],
+            )
         }
 
         for i in self.current.iter() {
             if i.1 > 4 {
-                self.square.set_fill_color(TETROMINO_COLORS[self.current_color]);
-                self.square.set_position((i.0 as f32 * 30f32 + 60f32, (i.1 - 4) as f32 * 30f32 + 60f32));
-                self.window.draw(&self.square);
+                let x: i32 = i.0.try_into().unwrap();
+                let y: i32 = i.1.try_into().unwrap();
+
+                d.draw_rectangle(
+                    x * 30 + 60,
+                    (y - 4) * 30 + 60,
+                    SQUARE_SIZE,
+                    SQUARE_SIZE,
+                    TETROMINO_COLORS[self.current_color],
+                )
             }
         }
     }
 
     fn run(self: &mut Self) {
-        let mut clock = Clock::start();
+        use raylib::consts::KeyboardKey::*;
+
+        let mut last_time = self.rl.get_time();
 
         let (current, current_color) = self.random_tetromino();
         self.current = current;
@@ -180,43 +192,19 @@ impl Game<'_> {
         self.next = next;
         self.next_color = next_color;
 
-        // Flags to signify which key is being held
-        let mut up = false;
-        let mut down = false;
-        let mut left = false;
-        let mut right = false;
-
-        while self.window.is_open() {
-            let dt = clock.elapsed_time().as_seconds();
-            clock.restart();
-
+        while !self.rl.window_should_close() {
+            let curr_time = self.rl.get_time();
+            let dt = curr_time - last_time;
+            last_time = curr_time;
             self.time += dt;
 
-            while let Some(event) = self.window.poll_event() {
-                match event {
-                    Event::Closed => self.window.close(),
-
-                    Event::KeyPressed { code: Key::Up, .. } => up = true,
-                    Event::KeyPressed { code: Key::Down, .. } => down = true,
-                    Event::KeyPressed { code: Key::Left, .. } => left = true,
-                    Event::KeyPressed { code: Key::Right, .. } => right = true,
-
-                    // Clear the key-held flags once that key is released.
-                    Event::KeyReleased { code: Key::Up, .. } => up = false,
-                    Event::KeyReleased { code: Key::Down, .. } => down = false,
-                    Event::KeyReleased { code: Key::Left, .. } => left = false,
-                    Event::KeyReleased { code: Key::Right, .. } => right = false,
-
-                    _ => {}
-                }
-            }
-
-            self.window.clear(Color::BLACK);
+            let up = self.rl.is_key_down(KEY_UP);
+            let down = self.rl.is_key_down(KEY_DOWN);
+            let left = self.rl.is_key_down(KEY_LEFT);
+            let right = self.rl.is_key_down(KEY_RIGHT);
 
             self.update(dt, up, down, left, right);
             self.draw();
-
-            self.window.display();
         }
     }
 }

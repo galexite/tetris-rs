@@ -1,11 +1,11 @@
 [package]
 name = "tetris"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["George White <me@galexite.uk>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sfml = "0.15"
+raylib = "3.5"
 rand = "0.7"
