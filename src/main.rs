@@ -34,8 +34,9 @@ const GAME_HEIGHT: usize = 20;
 const GAME_SIZE: usize = GAME_WIDTH * (GAME_HEIGHT + 4);
 const GAME_UNPLAYABLE_SIZE: usize = GAME_WIDTH * 4;
 
-const GAME_DELAY: f64 = 0.5f64;
-const GAME_QUICK_DELAY: f64 = 0.2f64;
+const GAME_DELAY: f64 = 0.5;
+const GAME_LR_DELAY: f64 = 0.2;
+const GAME_QUICK_DELAY: f64 = 0.2;
 
 const SQUARE_SIZE: i32 = 28;
 
@@ -46,6 +47,7 @@ struct Game {
     next: [(usize, usize); 4],
     next_color: usize,
     time: f64,
+    lr_time: f64,
     rl: RaylibHandle,
     thread: RaylibThread,
     rng: ThreadRng,
@@ -59,7 +61,8 @@ impl Game {
 
         Game {
             field: [0; GAME_SIZE],
-            time: 0f64,
+            time: 0.0,
+            lr_time: 0.0,
             current: [(0, 0); 4],
             current_color: 0,
             next: [(0, 0); 4],
@@ -86,13 +89,12 @@ impl Game {
     fn update(self: &mut Self, dt: f64, up: bool, down: bool, left: bool, right: bool) {
         // (1) Check if down, then accelerate delay
         let delay = if down { GAME_QUICK_DELAY } else { GAME_DELAY };
+        let mut copy = self.current;
+        let mut correct = true;
+        let mut swap = false;
 
         // Delay movement of tetrominos
-        if self.time > delay {
-            let mut copy = self.current;
-            let mut correct = true;
-            let mut swap = false;
-
+        if self.lr_time > GAME_LR_DELAY {
             for i in copy.iter_mut() {
                 if (left && (i.0 <= 0 || self.field[i.0 + (i.1 + 1) * GAME_WIDTH - 1] != 0))
                     || (right
@@ -116,6 +118,11 @@ impl Game {
                 self.current = copy;
             }
 
+            // (6) Reset delay timer
+            self.lr_time = 0.0;
+        }
+
+        if self.time > delay {
             for i in self.current.iter_mut() {
                 (*i).1 += 1;
 
@@ -138,7 +145,7 @@ impl Game {
             }
 
             // (6) Reset delay timer
-            self.time = 0f64;
+            self.time = 0.0;
         }
     }
 
@@ -197,6 +204,7 @@ impl Game {
             let dt = curr_time - last_time;
             last_time = curr_time;
             self.time += dt;
+            self.lr_time += dt; // there must be a better way of doing this!
 
             let up = self.rl.is_key_down(KEY_UP);
             let down = self.rl.is_key_down(KEY_DOWN);
